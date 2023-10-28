@@ -17,13 +17,14 @@ mod task;
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
+use crate::config::MAX_SYSCALL_NUM;
 use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
-
+use crate::timer::get_time_us;
 /// The task manager, where all the tasks are managed.
 ///
 /// Functions implemented on `TaskManager` deals with all task state transitions
@@ -78,6 +79,7 @@ impl TaskManager {
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
         let next_task = &mut inner.tasks[0];
+        next_task.start_time = get_time_us();
         next_task.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
         drop(inner);
@@ -139,6 +141,9 @@ impl TaskManager {
         if let Some(next) = self.find_next_task() {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
+            if inner.tasks[next].start_time == 0 {
+                inner.tasks[next].start_time = get_time_us();
+            }
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
@@ -152,6 +157,53 @@ impl TaskManager {
         } else {
             panic!("All applications completed!");
         }
+    }
+
+    fn get_current_status(&self) -> TaskStatus {
+        let inner = TASK_MANAGER.inner.exclusive_access();
+        let current = inner.current_task;
+        let ret = inner.tasks[current].task_status;
+        drop(inner);
+        ret
+    }
+
+    fn get_current_start_time(&self) -> usize {
+        let inner = TASK_MANAGER.inner.exclusive_access();
+        let current = inner.current_task;
+        let ret = inner.tasks[current].start_time;
+        drop(inner);
+        ret
+    }
+
+    fn get_current_syscall_times(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let inner = TASK_MANAGER.inner.exclusive_access();
+        let current = inner.current_task;
+        let ret = inner.tasks[current].syscall_counter;
+        drop(inner);
+        ret
+    }
+
+    fn update_current_syscall_times(&self,syscall_id:usize) {
+        let mut inner = TASK_MANAGER.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_counter[syscall_id] = inner.tasks[current].syscall_counter[syscall_id] + 1;
+        drop(inner);
+    }
+
+    fn _sys_mmap(&self, _start: usize, _len: usize, _port: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let ret = inner.tasks[current].memory_set.mmap(_start, _len, _port);
+        drop(inner); 
+        ret
+    }
+
+    fn _sys_munmap(&self, _start: usize, _len: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let ret = inner.tasks[current].memory_set.munmap(_start, _len);
+        drop(inner); 
+        ret
     }
 }
 
@@ -201,4 +253,31 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// get current task status 
+pub fn get_current_status() -> TaskStatus {
+    TASK_MANAGER.get_current_status()
+}
+/// get_current_start_time
+pub fn get_current_start_time() -> usize {
+    TASK_MANAGER.get_current_start_time()
+}
+/// get_current_syscall_times
+pub fn get_current_syscall_times() -> [u32; MAX_SYSCALL_NUM] {
+    TASK_MANAGER.get_current_syscall_times()
+}
+/// update_current_syscall_times
+pub fn update_current_syscall_times(syscall_id:usize){
+    TASK_MANAGER.update_current_syscall_times(syscall_id);
+}
+
+/// allocate memory
+pub fn _sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
+    TASK_MANAGER._sys_mmap(_start, _len, _port)
+}
+
+/// unmmap 
+pub fn _sys_munmap(_start: usize, _len: usize,) -> isize {
+    TASK_MANAGER._sys_munmap(_start, _len)
 }
