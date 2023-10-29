@@ -2,6 +2,7 @@
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::MAX_SYSCALL_NUM;
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
@@ -68,6 +69,15 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// stride
+    pub stride:usize,
+    /// priority
+    pub priority:usize,
+    /// the time when the task is first sched
+    pub start_time: usize,
+    /// syscall counter
+    pub syscall_counter: [u32; MAX_SYSCALL_NUM],
 }
 
 impl TaskControlBlockInner {
@@ -118,6 +128,10 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    stride: 0,
+                    priority: 16,
+                    start_time: 0,
+                    syscall_counter: [0; MAX_SYSCALL_NUM],
                 })
             },
         };
@@ -191,6 +205,10 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    stride: 0,
+                    priority: 16,
+                    start_time: 0,
+                    syscall_counter: [0; MAX_SYSCALL_NUM],
                 })
             },
         });
@@ -236,6 +254,51 @@ impl TaskControlBlock {
             None
         }
     }
+    /// get stride
+    pub fn get_stride(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        let ret = inner.stride;
+        ret
+    }
+    /// get_current_status
+    pub fn get_current_status(&self) -> TaskStatus {
+        let inner = self.inner.exclusive_access();
+        let ret = inner.task_status;
+        ret
+    }
+    /// get_current_start_time
+    pub fn get_current_start_time(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        let ret = inner.start_time;
+        ret
+    }
+    /// get_current_syscall_times
+    pub fn get_current_syscall_times(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let inner = self.inner.exclusive_access();
+        let ret = inner.syscall_counter;
+        ret
+    }
+    /// update syscall_counter
+    pub fn update_current_syscall_times(&self,syscall_id:usize) {
+        let mut inner = self.inner.exclusive_access();
+        inner.syscall_counter[syscall_id] = inner.syscall_counter[syscall_id] + 1;
+        // drop(inner);
+    }
+    /// mmap
+    pub fn _sys_mmap(&self, _start: usize, _len: usize, _port: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let ret = inner.memory_set.mmap(_start, _len, _port);
+        // drop(inner); 
+        ret
+    }
+    /// munmap
+    pub fn _sys_munmap(&self, _start: usize, _len: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let ret = inner.memory_set.munmap(_start, _len);
+        // drop(inner); 
+        ret
+    }
+
 }
 
 #[derive(Copy, Clone, PartialEq)]
