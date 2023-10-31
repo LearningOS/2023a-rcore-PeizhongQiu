@@ -156,6 +156,10 @@ impl PageTable {
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
+    /// ismapped
+    pub fn is_mapped(&self, vpn: VirtPageNum) -> bool{
+        self.find_pte(vpn).unwrap_or(& mut PageTableEntry { bits: 0 }).is_valid()
+    }
 }
 
 /// Translate&Copy a ptr[u8] array with LENGTH len to a mutable u8 Vec through page table
@@ -275,4 +279,14 @@ impl Iterator for UserBufferIterator {
             Some(r)
         }
     }
+}
+/// translated_type
+pub fn translated_type<T>(token: usize, ptr: *mut T) -> usize {
+    let page_table = PageTable::from_token(token);
+    let start = ptr as usize;
+    let start_va = VirtAddr::from(start);
+    let vpn = start_va.floor();
+    let ppn = page_table.translate(vpn).unwrap().ppn();
+    let ppa: PhysAddr = ppn.into();
+    ppa.0 + start_va.page_offset()
 }
