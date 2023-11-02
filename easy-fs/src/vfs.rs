@@ -276,10 +276,10 @@ impl Inode {
                 .modify(block_offset, |disk_inode: &mut DiskInode| {
                     disk_inode.link -= 1;
                     if disk_inode.link == 0 {
-                        disk_inode
-                            .clear_size(&self.block_device)
-                            .into_iter()
-                            .for_each(|data_block| fs.dealloc_data(data_block));
+                        let data_blocks_dealloc = disk_inode.clear_size(&self.block_device);
+                        for data_block in data_blocks_dealloc.into_iter() {
+                            fs.dealloc_data(data_block);
+                        }
                     }
                 });
             
