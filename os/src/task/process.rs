@@ -49,6 +49,20 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    /// enable_deadlock_detect
+    pub enable_deadlock_detect: bool, 
+    /// Available_mutex
+    pub available_mutex: Vec<usize>,
+    /// Allocation_mutex
+    pub allocation_mutex: Vec<Vec<usize>>,
+    /// need_mutex
+    pub need_mutex: Vec<Vec<usize>>,
+    /// Available_sem
+    pub available_sem: Vec<usize>,
+    /// Allocation_sem
+    pub allocation_sem: Vec<Vec<usize>>,
+    /// need_sem
+    pub need_sem: Vec<Vec<usize>>,
 }
 
 impl ProcessControlBlockInner {
@@ -119,6 +133,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    enable_deadlock_detect: false,
+                    available_mutex: Vec::new(),
+                    allocation_mutex: Vec::new(),
+                    available_sem: Vec::new(),
+                    allocation_sem: Vec::new(),
+                    need_mutex: Vec::new(),
+                    need_sem: Vec::new(),
                 })
             },
         });
@@ -144,6 +165,10 @@ impl ProcessControlBlock {
         // add main thread to the process
         let mut process_inner = process.inner_exclusive_access();
         process_inner.tasks.push(Some(Arc::clone(&task)));
+        process_inner.need_mutex.push(Vec::new());
+        process_inner.allocation_mutex.push(Vec::new());
+        process_inner.need_sem.push(Vec::new());
+        process_inner.allocation_sem.push(Vec::new());
         drop(process_inner);
         insert_into_pid2process(process.getpid(), Arc::clone(&process));
         // add main thread to scheduler
@@ -245,6 +270,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    enable_deadlock_detect: false,
+                    available_mutex: Vec::new(),
+                    allocation_mutex: Vec::new(),
+                    available_sem: Vec::new(),
+                    allocation_sem: Vec::new(),
+                    need_mutex: Vec::new(),
+                    need_sem: Vec::new(),
                 })
             },
         });
@@ -267,6 +299,10 @@ impl ProcessControlBlock {
         // attach task to child process
         let mut child_inner = child.inner_exclusive_access();
         child_inner.tasks.push(Some(Arc::clone(&task)));
+        child_inner.need_mutex.push(Vec::new());
+        child_inner.allocation_mutex.push(Vec::new());
+        child_inner.need_sem.push(Vec::new());
+        child_inner.allocation_sem.push(Vec::new());
         drop(child_inner);
         // modify kstack_top in trap_cx of this thread
         let task_inner = task.inner_exclusive_access();

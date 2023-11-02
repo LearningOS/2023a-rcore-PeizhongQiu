@@ -274,3 +274,13 @@ impl Iterator for UserBufferIterator {
         }
     }
 }
+/// translated_type
+pub fn translated_type<T>(token: usize, ptr: *mut T) -> usize {
+    let page_table = PageTable::from_token(token);
+    let start = ptr as usize;
+    let start_va = VirtAddr::from(start);
+    let vpn = start_va.floor();
+    let ppn = page_table.translate(vpn).unwrap().ppn();
+    let ppa: PhysAddr = ppn.into();
+    ppa.0 + start_va.page_offset()
+}
