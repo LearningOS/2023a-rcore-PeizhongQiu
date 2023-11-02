@@ -91,31 +91,28 @@ pub fn sys_mutex_lock(mutex_id: usize) -> isize {
         let mut finished = vec![false;task_num];
         
         let mut work = process_inner.available_mutex.clone();
-        loop {
-            let mut change = false;
+        let mut change = true;
+        while change {
+            change = false;
             for i in 0..task_num {
                 if finished[i] == true {
                     continue;
                 } else {
-                    let mut ok = true;
+                    change = true;
                     for j in 0..work.len() {
                         if process_inner.need_mutex[i][j] - process_inner.allocation_mutex[i][j] > work[j] {
-                            ok = false;
+                            change = false;
                             break;
                         }
                     }
-                    if ok {
-                        finished[i] = ok;
-                        change = ok;
+
+                    finished[i] = change;
+                    if change {
                         for j in 0..work.len() {
                             work[j] += process_inner.allocation_mutex[i][j];
                         }
                     }
-                    
                 }
-            }
-            if !change {
-                break;
             }
         }
         for i in 0..finished.len() {
@@ -253,32 +250,28 @@ pub fn sys_semaphore_down(sem_id: usize) -> isize {
         let mut finished = vec![false;task_num];
 
         let mut work = process_inner.available_sem.clone();
-        
-        loop {
-            let mut change = false;
+        let mut change = true;
+        while change {
+            change = false;
             for i in 0..task_num {
                 if finished[i] == true {
                     continue;
                 } else {
-                    let mut ok = true;
+                    change = true;
                     for j in 0..work.len() {
                         if process_inner.need_sem[i][j] - process_inner.allocation_sem[i][j] > work[j] {
-                            ok = false;
+                            change = false;
                             break;
                         }
                     }
-                    if ok {
-                        finished[i] = ok;
-                        change = ok;
+                    finished[i] = change;
+                    if change {
                         for j in 0..work.len() {
                             work[j] += process_inner.allocation_sem[i][j];
                         }
                     }
                     
                 }
-            }
-            if !change {
-                break;
             }
         }
         for i in 0..finished.len() {
